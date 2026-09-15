@@ -1,121 +1,121 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useState, type FormEvent } from 'react'
+import { calculateDeposit, DepositApiError } from './api/depositCalculatorApi'
+import { CalculationResult } from './components/CalculationResult'
+import { DepositCalculatorForm } from './components/DepositCalculatorForm'
+import type {
+  DepositCalculationResponse,
+  DepositField,
+  DepositFormErrors,
+  DepositFormValues,
+} from './types/deposit'
 import './App.css'
 
+const INITIAL_VALUES: DepositFormValues = {
+  amount: '100000',
+  months: '12',
+  rate: '8',
+}
+
+function validateForm(values: DepositFormValues): DepositFormErrors {
+  const errors: DepositFormErrors = {}
+  const amount = Number(values.amount)
+  const months = Number(values.months)
+  const rate = Number(values.rate)
+
+  if (values.amount.trim() === '' || !Number.isFinite(amount)) {
+    errors.amount = 'Введите сумму вклада'
+  } else if (amount < 1000 || amount > 10_000_000) {
+    errors.amount = 'Допустимая сумма — от 1 000 до 10 000 000 ₽'
+  }
+
+  if (values.months.trim() === '' || !Number.isInteger(months)) {
+    errors.months = 'Укажите целое количество месяцев'
+  } else if (months < 1 || months > 60) {
+    errors.months = 'Допустимый срок — от 1 до 60 месяцев'
+  }
+
+  if (values.rate.trim() === '' || !Number.isFinite(rate)) {
+    errors.rate = 'Введите годовую ставку'
+  } else if (rate < 1 || rate > 20) {
+    errors.rate = 'Допустимая ставка — от 1% до 20%'
+  }
+
+  return errors
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [values, setValues] = useState<DepositFormValues>(INITIAL_VALUES)
+  const [errors, setErrors] = useState<DepositFormErrors>({})
+  const [result, setResult] = useState<DepositCalculationResponse | null>(null)
+  const [calculatedAmount, setCalculatedAmount] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [requestError, setRequestError] = useState<string | null>(null)
+
+  const handleChange = (field: DepositField, value: string) => {
+    setValues((current) => ({ ...current, [field]: value }))
+    setErrors((current) => ({ ...current, [field]: undefined }))
+    setRequestError(null)
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const validationErrors = validateForm(values)
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
+      return
+    }
+
+    const request = {
+      amount: Number(values.amount),
+      months: Number(values.months),
+      rate: Number(values.rate),
+    }
+
+    setIsLoading(true)
+    setRequestError(null)
+
+    try {
+      const calculation = await calculateDeposit(request)
+      setResult(calculation)
+      setCalculatedAmount(request.amount)
+    } catch (error) {
+      setResult(null)
+      setCalculatedAmount(null)
+
+      if (error instanceof DepositApiError) {
+        setErrors(error.fieldErrors)
+        setRequestError(error.message)
+      } else {
+        setRequestError('Не удалось выполнить расчёт. Попробуйте ещё раз.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+    <main className="app-shell">
+      <section className="calculator-card" aria-labelledby="page-title">
+        <header className="card-heading">
+          <h1 id="page-title">Калькулятор вклада</h1>
+          <p>Введите параметры для расчёта</p>
+        </header>
+
+        <DepositCalculatorForm
+          values={values}
+          errors={errors}
+          isLoading={isLoading}
+          requestError={requestError}
+          onChange={handleChange}
+          onSubmit={handleSubmit}
+        />
+
+        {result && calculatedAmount !== null && (
+          <CalculationResult initialAmount={calculatedAmount} result={result} />
+        )}
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 
